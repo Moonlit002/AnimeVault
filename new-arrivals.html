@@ -376,21 +376,27 @@
             }
         }
 
-        const API_URL = '/api/products';
-
-        async function syncWithBackend(products) {
+        // Fetch latest user data from Supabase to ensure cross-device sync
+        async function fetchLatestUserData() {
+            if (!currentUser) return;
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(products)
-                });
-                if (!response.ok) throw new Error('Failed to sync with backend');
-                console.log('Synced with backend successfully');
-            } catch (error) {
-                console.log('Backend sync failed, changes saved only locally:', error);
+                const response = await fetch(`/api/users/${currentUser.id}?t=${Date.now()}`);
+                if (response.ok) {
+                    const latestUser = await response.json();
+                    if (latestUser) {
+                        // Preserve the password from local storage if not returned by API
+                        const updatedUser = { ...currentUser, ...latestUser };
+                        currentUser = updatedUser;
+                        localStorage.setItem(DB_KEYS.LOGGED_IN_USER, JSON.stringify(currentUser));
+                        updateUserUI();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch latest user data:', e);
             }
         }
+
+        const API_URL = '/api/products';
 
         // Cart Logic
         let cart = getDB(DB_KEYS.CART);
@@ -507,6 +513,7 @@
             let itemsProcessed = 0;
             let itemsToKeep = [];
             let stockExceeded = false;
+            let ordersToSave = [];
 
             // Sort cart so we process items of the same ID together
             const cartItemsById = cart.reduce((acc, item) => {
@@ -537,10 +544,11 @@
                             items: [{ name: product.name, image: product.image, price: product.price }],
                             amount: product.price,
                             status: 'Pending',
-                            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                            date: new Date().toISOString(),
                             timestamp: Date.now()
                         };
                         orders.unshift(individualOrder);
+                        ordersToSave.push(individualOrder);
                         itemsProcessed++;
                     }
 
@@ -569,11 +577,45 @@
                 return;
             }
 
+            // Save orders to Supabase
+            try {
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(ordersToSave)
+                });
+                
+                if (response.ok) {
+                    console.log('Orders saved to Supabase successfully');
+                } else {
+                    throw new Error('Server responded with error');
+                }
+            } catch (e) {
+                console.error('Failed to save orders to Supabase:', e);
+                showNotification('Warning: Order saved locally, but failed to sync with server');
+            }
+
             setDB(DB_KEYS.ORDERS, orders);
             setDB(DB_KEYS.PRODUCTS, products);
             
-            // Sync with backend
-            await syncWithBackend(products);
+            // Update stock on server for each product
+            for (const productId in cartItemsById) {
+                const product = products.find(p => String(p.id) === String(productId));
+                if (product) {
+                    try {
+                        await fetch(`/api/products/${productId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                stock: product.stock,
+                                sales: product.sales
+                            })
+                        });
+                    } catch (e) {
+                        console.error(`Failed to sync stock for product ${productId}:`, e);
+                    }
+                }
+            }
             
             cart = itemsToKeep;
             setDB(DB_KEYS.CART, cart);
@@ -644,6 +686,7 @@
                 const finalQty = Math.min(quantity, availableStock);
                 
                 const orders = getDB(DB_KEYS.ORDERS);
+                const ordersToSave = [];
                 for(let i = 0; i < finalQty; i++) {
                     const newOrder = {
                         id: Math.floor(Date.now() + Math.random() * 1000),
@@ -654,10 +697,11 @@
                         items: [{ name: product.name, image: product.image, price: product.price }],
                         amount: product.price,
                         status: 'Pending',
-                        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        date: new Date().toISOString(),
                         timestamp: Date.now()
                     };
                     orders.unshift(newOrder);
+                    ordersToSave.push(newOrder);
                 }
                 
                 // Decrement stock and increment sales
@@ -667,8 +711,37 @@
                 setDB(DB_KEYS.ORDERS, orders);
                 setDB(DB_KEYS.PRODUCTS, products);
                 
-                // Sync with backend
-                await syncWithBackend(products);
+                // Save orders to Supabase
+                try {
+                    const response = await fetch('/api/orders', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ordersToSave)
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Orders saved to Supabase successfully');
+                    } else {
+                        throw new Error('Server responded with error');
+                    }
+                } catch (e) {
+                    console.error('Failed to save orders to Supabase:', e);
+                    showNotification('Warning: Order saved locally, but failed to sync with server');
+                }
+                
+                // Update stock on server for this specific product
+                try {
+                    await fetch(`/api/products/${productId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            stock: products[productIndex].stock,
+                            sales: products[productIndex].sales
+                        })
+                    });
+                } catch (e) {
+                    console.error(`Failed to sync stock for product ${productId}:`, e);
+                }
                 
                 renderProducts();
                 if (finalQty < quantity) {
@@ -766,6 +839,7 @@
         // Initial Load
         updateCartUI();
         updateUserUI();
+        fetchLatestUserData();
         renderProducts();
 
         // Listen for storage changes

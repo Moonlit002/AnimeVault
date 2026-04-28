@@ -671,6 +671,7 @@
                         product: order.product,
                         amount: order.amount,
                         status: order.status,
+                        image: order.image, // Include product image
                         date: order.date ? new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown',
                         timestamp: order.date ? new Date(order.date).getTime() : 0
                     }));
@@ -688,20 +689,6 @@
                 }
             } catch (error) {
                 console.log('Server unreachable for orders, using local storage');
-            }
-        }
-
-        async function syncWithBackend(products) {
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(products)
-                });
-                if (!response.ok) throw new Error('Failed to sync with backend');
-                console.log('Synced with backend successfully');
-            } catch (error) {
-                console.log('Backend sync failed, changes saved only locally:', error);
             }
         }
 
@@ -834,24 +821,65 @@
             modal.classList.toggle('show');
         }
 
-        function editProduct(id) {
-            const products = getDB(DB_KEYS.PRODUCTS);
-            // Support both numeric and string IDs
-            const product = products.find(p => String(p.id) === String(id));
-            
-            if (product) {
-                document.getElementById('product-id-input').value = product.id;
-                document.getElementById('product-name-input').value = product.name;
-                document.getElementById('product-price-input').value = product.price;
-                document.getElementById('product-category-input').value = product.category;
-                document.getElementById('product-stock-input').value = product.stock || 0;
-                document.getElementById('product-image-input').value = product.image;
+        async function editProduct(id) {
+            try {
+                // Fetch the latest product data from server to ensure accurate stock/price
+                const response = await fetch(`${API_URL}?id=${id}&t=${Date.now()}`);
+                let product;
                 
-                document.getElementById('modal-title').innerText = 'Edit Product';
-                document.getElementById('modal-submit-btn').innerText = 'Update Product';
+                if (response.ok) {
+                    const serverProducts = await response.json();
+                    // If server returns an array, find the specific product
+                    if (Array.isArray(serverProducts)) {
+                        product = serverProducts.find(p => String(p.id) === String(id));
+                    } else {
+                        product = serverProducts;
+                    }
+                }
+
+                // Fallback to local storage if server fetch fails or product not found
+                if (!product) {
+                    console.log('Product not found on server or server error, falling back to local storage');
+                    const products = getDB(DB_KEYS.PRODUCTS);
+                    product = products.find(p => String(p.id) === String(id));
+                }
                 
-                const modal = document.getElementById('modal');
-                modal.classList.add('show');
+                if (product) {
+                    document.getElementById('product-id-input').value = product.id;
+                    document.getElementById('product-name-input').value = product.name;
+                    document.getElementById('product-price-input').value = product.price;
+                    document.getElementById('product-category-input').value = product.category;
+                    document.getElementById('product-stock-input').value = product.stock || 0;
+                    document.getElementById('product-image-input').value = product.image;
+                    
+                    document.getElementById('modal-title').innerText = 'Edit Product';
+                    document.getElementById('modal-submit-btn').innerText = 'Update Product';
+                    
+                    const modal = document.getElementById('modal');
+                    modal.classList.add('show');
+                } else {
+                    showNotification('Product not found');
+                }
+            } catch (error) {
+                console.error('Error fetching product for edit:', error);
+                // Last resort fallback
+                const products = getDB(DB_KEYS.PRODUCTS);
+                const product = products.find(p => String(p.id) === String(id));
+                if (product) {
+                    // Fill form with local data if that's all we have
+                    document.getElementById('product-id-input').value = product.id;
+                    document.getElementById('product-name-input').value = product.name;
+                    document.getElementById('product-price-input').value = product.price;
+                    document.getElementById('product-category-input').value = product.category;
+                    document.getElementById('product-stock-input').value = product.stock || 0;
+                    document.getElementById('product-image-input').value = product.image;
+                    
+                    document.getElementById('modal-title').innerText = 'Edit Product';
+                    document.getElementById('modal-submit-btn').innerText = 'Update Product';
+                    
+                    const modal = document.getElementById('modal');
+                    modal.classList.add('show');
+                }
             }
         }
 
@@ -1499,43 +1527,60 @@
                     return;
                 }
 
-                let updatedProducts;
                 if (productId) {
-                    // Edit existing product
-                    const index = products.findIndex(p => p.id == productId);
-                    if (index !== -1) {
-                        const originalProduct = products[index];
-                        productData.id = originalProduct.id;
-                        productData.sales = originalProduct.sales || 0;
-                        products[index] = productData;
-                        showNotification('Product updated successfully!');
+                    // Edit existing product - Use PUT for single product update
+                    try {
+                        const response = await fetch(`${API_URL}/${productId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(productData)
+                        });
+                        
+                        if (response.ok) {
+                            const index = products.findIndex(p => String(p.id) === String(productId));
+                            if (index !== -1) {
+                                products[index] = { ...products[index], ...productData };
+                                setDB(DB_KEYS.PRODUCTS, products);
+                            }
+                            showNotification('Product updated successfully!');
+                            e.target.reset();
+                            toggleModal();
+                            renderDashboard();
+                        } else {
+                            throw new Error('Failed to update product on server');
+                        }
+                    } catch (error) {
+                        console.error('Error updating product:', error);
+                        showNotification('Error updating product on server.');
                     }
-                    updatedProducts = products;
                 } else {
-                    // Add new product
+                    // Add new product - Use POST for single product creation
                     const newProduct = {
                         id: Date.now(),
                         ...productData
                     };
-                    products.unshift(newProduct);
-                    updatedProducts = products;
-                    showNotification('Product added successfully!');
-                }
+                    
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newProduct) // Send only the new product
+                        });
 
-                // Sync with server
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedProducts)
-                });
-
-                if (response.ok) {
-                    setDB(DB_KEYS.PRODUCTS, updatedProducts);
-                    e.target.reset();
-                    toggleModal();
-                    renderDashboard();
-                } else {
-                    throw new Error('Failed to save to server');
+                        if (response.ok) {
+                            products.unshift(newProduct);
+                            setDB(DB_KEYS.PRODUCTS, products);
+                            showNotification('Product added successfully!');
+                            e.target.reset();
+                            toggleModal();
+                            renderDashboard();
+                        } else {
+                            throw new Error('Failed to save product to server');
+                        }
+                    } catch (error) {
+                        console.error('Error adding product:', error);
+                        showNotification('Error saving product to server.');
+                    }
                 }
             } catch (error) {
                 console.error('Error saving product:', error);
@@ -1544,7 +1589,11 @@
         });
 
         // Initial Render
-        renderDashboard();
+        if (localStorage.getItem(DB_KEYS.ADMIN_SESSION)) {
+            initializeProducts();
+        } else {
+            renderDashboard();
+        }
 
         // Listen for storage changes (if customer buys in another tab)
         window.addEventListener('storage', (e) => {

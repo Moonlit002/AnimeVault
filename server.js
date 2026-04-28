@@ -106,6 +106,23 @@ app.post('/api/products', async (req, res) => {
     res.json({ message: 'Data saved to Supabase successfully' });
 });
 
+app.put('/api/products/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    // Ensure id is not in updates if it's the primary key
+    delete updates.id;
+    
+    const { data, error } = await supabase
+        .from('products')
+        .update(updates)
+        .eq('id', id)
+        .select();
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ message: 'Product updated successfully', data });
+});
+
 app.delete('/api/products/:id', async (req, res) => {
     const { id } = req.params;
     const { data, error } = await supabase.from('products').delete().eq('id', id);
@@ -258,6 +275,7 @@ app.post('/api/orders', async (req, res) => {
             product: order.product,
             status: order.status || 'Pending',
             amount: order.amount,
+            image: order.image, // New: save product image with order
             date: order.date || new Date().toISOString()
         };
     });

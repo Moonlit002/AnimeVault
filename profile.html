@@ -159,6 +159,25 @@
             window.location.href = 'index.html';
         }
 
+        // Fetch latest user data from Supabase to ensure cross-device sync
+        async function fetchLatestUserData() {
+            try {
+                const response = await fetch(`/api/users/${currentUser.id}?t=${Date.now()}`);
+                if (response.ok) {
+                    const latestUser = await response.json();
+                    if (latestUser) {
+                        // Preserve the password from local storage if not returned by API
+                        const updatedUser = { ...currentUser, ...latestUser };
+                        currentUser = updatedUser;
+                        localStorage.setItem(DB_KEYS.LOGGED_IN_USER, JSON.stringify(currentUser));
+                        renderProfile();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch latest user data:', e);
+            }
+        }
+
         function getDB(key, defaultVal = []) {
             const data = localStorage.getItem(key);
             return data ? JSON.parse(data) : defaultVal;
@@ -379,7 +398,7 @@
                             status: order.status,
                             date: order.date ? new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown',
                             timestamp: order.date ? new Date(order.date).getTime() : 0,
-                            image: localMatch ? localMatch.image : (order.image || null)
+                            image: order.image || (localMatch ? localMatch.image : null)
                         };
                     });
                 }
@@ -397,6 +416,9 @@
         async function initializeProfile() {
             // Render local data immediately for better UX
             renderProfile();
+            
+            // Fetch latest user data (including avatar) from Supabase
+            await fetchLatestUserData();
             
             // Try to load orders from Supabase in the background
             const supabaseOrders = await loadOrdersFromSupabase();

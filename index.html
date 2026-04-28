@@ -534,6 +534,26 @@
             }
         }
 
+        // Fetch latest user data from Supabase to ensure cross-device sync
+        async function fetchLatestUserData() {
+            if (!currentUser) return;
+            try {
+                const response = await fetch(`/api/users/${currentUser.id}?t=${Date.now()}`);
+                if (response.ok) {
+                    const latestUser = await response.json();
+                    if (latestUser) {
+                        // Preserve the password from local storage if not returned by API
+                        const updatedUser = { ...currentUser, ...latestUser };
+                        currentUser = updatedUser;
+                        localStorage.setItem(DB_KEYS.LOGGED_IN_USER, JSON.stringify(currentUser));
+                        updateUserUI();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch latest user data:', e);
+            }
+        }
+
         // Cart Logic
         let cart = getDB(DB_KEYS.CART);
         const cartCountEl = document.getElementById('cart-count');
@@ -739,15 +759,25 @@
 
             setDB(DB_KEYS.ORDERS, orders);
             setDB(DB_KEYS.PRODUCTS, products);
-            
-            // Sync with backend
-            try {
-                await fetch('/api/products', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(products)
-                });
-            } catch (e) { console.log("Backend sync failed"); }
+
+            // Update stock on server for each product
+            for (const productId in cartItemsById) {
+                const product = products.find(p => String(p.id) === String(productId));
+                if (product) {
+                    try {
+                        await fetch(`/api/products/${productId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                stock: product.stock,
+                                sales: product.sales
+                            })
+                        });
+                    } catch (e) {
+                        console.error(`Failed to sync stock for product ${productId}:`, e);
+                    }
+                }
+            }
             
             cart = itemsToKeep;
             setDB(DB_KEYS.CART, cart);
@@ -861,20 +891,18 @@
                     showNotification('Warning: Order saved locally, but failed to sync with server');
                 }
                 
-                // Sync with backend if available
+                // Update stock on server for this specific product
                 try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
+                    await fetch(`/api/products/${productId}`, {
+                        method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(products)
+                        body: JSON.stringify({ 
+                            stock: products[productIndex].stock,
+                            sales: products[productIndex].sales
+                        })
                     });
-                    if (response.ok) {
-                        console.log("Backend sync successful");
-                    } else {
-                        console.error("Backend sync failed with status:", response.status);
-                    }
-                } catch (e) { 
-                    console.error("Backend sync error:", e); 
+                } catch (e) {
+                    console.error(`Failed to sync stock for product ${productId}:`, e);
                 }
 
                 renderProducts();
@@ -1081,6 +1109,7 @@
         // Initial Load
         updateCartUI();
         updateUserUI();
+        fetchLatestUserData();
         loadLimitedEdition();
         // renderProducts is now called inside initializeProducts for better sync
 
