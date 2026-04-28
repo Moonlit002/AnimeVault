@@ -323,36 +323,46 @@
         async function confirmDelivery(orderId) {
             const confirmed = await showConfirm('Confirm Delivery', 'Have you received this item? Confirming will mark it as Delivered.');
             if (confirmed) {
-                // Update in Supabase first
-                try {
-                    await fetch(`/api/orders/${orderId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'Delivered' })
-                    });
-                } catch (e) {
-                    console.error('Failed to update order in Supabase:', e);
-                }
-                
-                // Also update locally
+                // Optimistic update
                 const orders = getDB(DB_KEYS.ORDERS);
                 const orderIndex = orders.findIndex(o => o.id === orderId || o.order_id === orderId);
                 if (orderIndex !== -1) {
                     orders[orderIndex].status = 'Delivered';
                     setDB(DB_KEYS.ORDERS, orders);
+                    renderProfile();
                 }
-                
-                showNotification('Order marked as Delivered. Thank you!');
-                renderProfile();
+
+                try {
+                    const response = await fetch(`/api/orders/${orderId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'Delivered' })
+                    });
+                    
+                    if (!response.ok) throw new Error('Failed to update server');
+                    
+                    // Refresh from server
+                    const supabaseOrders = await loadOrdersFromSupabase();
+                    if (supabaseOrders && supabaseOrders.length > 0) {
+                        setDB(DB_KEYS.ORDERS, supabaseOrders);
+                        renderProfile();
+                    }
+                    showNotification('Order marked as Delivered. Thank you!');
+                } catch (e) {
+                    console.error('Failed to update order in Supabase:', e);
+                    showNotification('Status updated locally, but failed to sync with server.', 'warning');
+                }
             }
         }
 
         async function loadOrdersFromSupabase() {
             try {
-                const url = `/api/orders?userId=${encodeURIComponent(currentUser.id)}&userName=${encodeURIComponent(currentUser.name)}`;
+                const url = `/api/orders?userId=${encodeURIComponent(currentUser.id)}&userName=${encodeURIComponent(currentUser.name)}&t=${Date.now()}`;
                 const response = await fetch(url);
                 if (response.ok) {
                     const supabaseOrders = await response.json();
+                    if (!Array.isArray(supabaseOrders)) return [];
+                    
                     const localOrders = getDB(DB_KEYS.ORDERS);
                     
                     return supabaseOrders.map(order => {
@@ -360,15 +370,15 @@
                         const localMatch = localOrders.find(lo => (lo.id === order.order_id || lo.order_id === order.order_id));
                         
                         return {
-                            id: order.order_id,
-                            order_id: order.order_id,
+                            id: order.order_id || order.id,
+                            order_id: order.order_id || order.id,
                             userId: (order.customer === currentUser.id || order.customer === currentUser.name) ? currentUser.id : order.customer,
                             customer: order.customer,
                             product: order.product,
                             amount: order.amount,
                             status: order.status,
-                            date: new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                            timestamp: new Date(order.date).getTime(),
+                            date: order.date ? new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown',
+                            timestamp: order.date ? new Date(order.date).getTime() : 0,
                             image: localMatch ? localMatch.image : (order.image || null)
                         };
                     });

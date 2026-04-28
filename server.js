@@ -8,10 +8,28 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const supabase = createClient(
-    process.env.SUPABASE_URL, 
-    process.env.SUPABASE_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('CRITICAL ERROR: SUPABASE_URL or SUPABASE_KEY is missing in .env file!');
+    console.log('Current SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
+    console.log('Current SUPABASE_KEY:', supabaseKey ? 'Set' : 'Missing');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Test Supabase connection
+async function testConnection() {
+    try {
+        const { data, error } = await supabase.from('products').select('count', { count: 'exact', head: true });
+        if (error) throw error;
+        console.log('Supabase connection successful. Products count:', data);
+    } catch (error) {
+        console.error('Supabase connection failed:', error.message);
+    }
+}
+testConnection();
 
 // --- FIX 1: MUST PUT THESE FIRST ---
 app.use(cors({
@@ -190,8 +208,20 @@ app.post('/api/login', async (req, res) => {
  });
  
  // 7. Orders API
+app.get('/api/users', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) throw error;
+        res.json(data || []);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/orders', async (req, res) => {
     const { userId, userName } = req.query;
+    console.log(`Fetching orders for userId: ${userId}, userName: ${userName}`);
     let query = supabase.from('orders').select('*');
     
     if (userId) {
@@ -201,7 +231,11 @@ app.get('/api/orders', async (req, res) => {
     }
     
     const { data, error } = await query.order('date', { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+        console.error('Error fetching orders:', error);
+        return res.status(500).json({ error: error.message });
+    }
+    console.log(`Found ${data.length} orders`);
     res.json(data);
 });
 
@@ -226,6 +260,7 @@ app.post('/api/orders', async (req, res) => {
 app.put('/api/orders/:orderId', async (req, res) => {
     const { orderId } = req.params;
     const updates = req.body;
+    console.log(`Attempting to update order ${orderId} with:`, updates);
     
     const { data, error } = await supabase
         .from('orders')
@@ -233,7 +268,17 @@ app.put('/api/orders/:orderId', async (req, res) => {
         .eq('order_id', orderId)
         .select();
     
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+        console.error(`Error updating order ${orderId}:`, error);
+        return res.status(500).json({ error: error.message });
+    }
+    
+    if (!data || data.length === 0) {
+        console.log(`No order found with order_id: ${orderId}`);
+        return res.status(404).json({ error: 'Order not found' });
+    }
+
+    console.log(`Order ${orderId} updated successfully:`, data[0]);
     res.json({ message: 'Order updated successfully', data });
 });
 

@@ -484,12 +484,27 @@
         };
 
         function getDB(key, defaultVal = []) {
-            const data = localStorage.getItem(key);
-            return data ? JSON.parse(data) : defaultVal;
+            try {
+                const data = localStorage.getItem(key);
+                if (!data) return defaultVal;
+                const parsed = JSON.parse(data);
+                return (Array.isArray(parsed) || (parsed && typeof parsed === 'object')) ? parsed : defaultVal;
+            } catch (e) {
+                console.error(`Error reading ${key} from localStorage:`, e);
+                return defaultVal;
+            }
         }
 
         function setDB(key, data) {
-            localStorage.setItem(key, JSON.stringify(data));
+            try {
+                if (data === undefined || data === null) {
+                    console.warn(`Attempted to set ${key} to null/undefined`);
+                    return;
+                }
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (e) {
+                console.error(`Error writing ${key} to localStorage:`, e);
+            }
         }
 
         const API_URL = '/api/products';
@@ -576,14 +591,27 @@
 
         // Initialize Products from API
         async function initializeProducts() {
-            if (!await checkAuth()) return;
-            
+            if (!await checkAuth()) {
+                console.log('Auth failed, skipping initialization');
+                return;
+            }
+
             try {
-                const response = await fetch(API_URL);
+                const response = await fetch(`${API_URL}?t=${Date.now()}`);
                 if (response.ok) {
                     const serverData = await response.json();
-                    setDB(DB_KEYS.PRODUCTS, serverData);
-                    console.log('Loaded products from server');
+                    
+                    if (serverData && Array.isArray(serverData)) {
+                        if (serverData.length > 0) {
+                            setDB(DB_KEYS.PRODUCTS, serverData);
+                            console.log('Loaded products from server');
+                        } else {
+                            console.log('Server returned empty product list');
+                            // If server explicitly returns empty array, it means there are no products
+                            // Only overwrite if local data is also empty or if we want to sync perfectly
+                            // For now, let's keep local data if server is empty as a safety measure
+                        }
+                    }
                 } else {
                     throw new Error('Failed to load from server');
                 }
@@ -592,7 +620,7 @@
                 const localProducts = getDB(DB_KEYS.PRODUCTS);
                 if (localProducts.length === 0) {
                     try {
-                        const response = await fetch('products.json');
+                        const response = await fetch(`products.json?t=${Date.now()}`);
                         const data = await response.json();
                         setDB(DB_KEYS.PRODUCTS, data);
                     } catch (e) {
@@ -601,37 +629,65 @@
                 }
             }
             
-            // Also load orders from Supabase
-            await initializeOrders();
+            // Also load orders and users from Supabase
+            await Promise.all([
+                initializeOrders(),
+                initializeUsers()
+            ]);
             renderDashboard();
         }
-        
+
+        async function initializeUsers() {
+            try {
+                const response = await fetch(`/api/users?t=${Date.now()}`);
+                if (response.ok) {
+                    const users = await response.json();
+                    if (Array.isArray(users)) {
+                        setDB('animevault_users', users);
+                        console.log(`Loaded ${users.length} users from server`);
+                    }
+                }
+            } catch (error) {
+                console.log('Failed to load users from server');
+            }
+        }
+
         async function initializeOrders() {
             try {
-                const response = await fetch(ORDERS_API_URL);
+                const response = await fetch(`${ORDERS_API_URL}?t=${Date.now()}`);
                 if (response.ok) {
                     const serverData = await response.json();
                     
+                    if (!serverData || !Array.isArray(serverData)) {
+                        console.log('Server returned invalid data format for orders');
+                        return;
+                    }
+
                     const mappedOrders = serverData.map(order => ({
-                        id: order.order_id,
-                        order_id: order.order_id,
+                        id: order.order_id || order.id,
+                        order_id: order.order_id || order.id,
                         userId: order.customer,
                         customer: order.customer,
                         product: order.product,
                         amount: order.amount,
                         status: order.status,
-                        date: new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                        timestamp: new Date(order.date).getTime()
+                        date: order.date ? new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown',
+                        timestamp: order.date ? new Date(order.date).getTime() : 0
                     }));
                     
-                    setDB(DB_KEYS.ORDERS, mappedOrders);
-                    console.log('Loaded orders from server');
+                    if (mappedOrders.length > 0) {
+                        setDB(DB_KEYS.ORDERS, mappedOrders);
+                        console.log('Loaded orders from server');
+                    } else {
+                        console.log('No orders found on server');
+                        // Optional: if we want to clear local orders if server is empty
+                        // setDB(DB_KEYS.ORDERS, []);
+                    }
                 } else {
                     throw new Error('Failed to load orders from server');
                 }
             } catch (error) {
                 console.log('Server unreachable for orders, using local storage');
-                showNotification('Warning: Failed to load orders from server, showing local orders only');
             }
         }
 
@@ -1193,6 +1249,12 @@
         }
 
         async function updateOrderStatus(orderId, newStatus) {
+            // Optimistic update
+            const orders = getDB(DB_KEYS.ORDERS);
+            const updatedOrders = orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
+            setDB(DB_KEYS.ORDERS, updatedOrders);
+            renderDashboard();
+
             try {
                 const response = await fetch(`${ORDERS_API_URL}/${orderId}`, {
                     method: 'PUT',
@@ -1200,14 +1262,21 @@
                     body: JSON.stringify({ status: newStatus })
                 });
 
-                if (!response.ok) throw new Error('Failed to update order status');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to update order status');
+                }
 
+                // Verify with server after update
                 await initializeOrders();
                 renderDashboard();
                 showNotification(`Order status updated to ${newStatus}`);
             } catch (error) {
                 console.error('Error updating order status:', error);
-                showNotification(`Error: ${error.message}`);
+                showNotification(`Error: ${error.message}`, 'error');
+                // Revert optimistic update on failure
+                await initializeOrders();
+                renderDashboard();
             }
         }
 
