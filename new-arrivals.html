@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimeVault | New Arrivals</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .product-card:hover .product-image {
+            transform: scale(1.05);
+        }
+        #notification {
+            transform: translateY(100px);
+            transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        #notification.show {
+            transform: translateY(0);
+        }
+        .custom-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+        .custom-modal.show {
+            display: flex;
+        }
+        .modal-content {
+            transform: scale(0.9);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .custom-modal.show .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+        #cart-drawer {
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #cart-drawer.show {
+            transform: translateX(0);
+        }
+        #cart-overlay {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        #cart-overlay.show {
+            display: block;
+            opacity: 1;
+        }
+        #auth-modal {
+            display: none;
+        }
+        #auth-modal.show {
+            display: flex;
+        }
+        .animate-modal {
+            animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes modalIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-white border border-slate-100 px-6 py-4 rounded-[24px] shadow-2xl flex items-center space-x-4 pointer-events-none min-w-[320px]">
+        <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        </div>
+        <div>
+            <p id="notification-text" class="font-bold text-slate-900 text-sm">Item added to cart</p>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Notification</p>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirm-modal" class="custom-modal">
+        <div class="modal-content bg-white w-full max-w-sm rounded-[32px] shadow-2xl p-8 text-center">
+            <div class="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h3 id="confirm-title" class="text-2xl font-extrabold text-slate-900 mb-2">Confirm Action</h3>
+            <p id="confirm-message" class="text-slate-500 font-medium mb-8 leading-relaxed">Are you sure you want to proceed with this action?</p>
+            
+            <div id="quantity-selector" class="mb-8 p-4 bg-slate-50 rounded-2xl flex items-center justify-between">
+                <span class="text-sm font-bold text-slate-700 uppercase tracking-wider">Quantity</span>
+                <div class="flex items-center space-x-4">
+                    <button onclick="updateConfirmQty(-1)" class="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-600 hover:bg-blue-600 hover:text-white transition-all">-</button>
+                    <input type="number" id="confirm-qty" value="1" min="1" class="w-12 text-center bg-transparent font-extrabold text-slate-900 focus:outline-none">
+                    <button onclick="updateConfirmQty(1)" class="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-600 hover:bg-blue-600 hover:text-white transition-all">+</button>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button id="confirm-cancel" class="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:bg-slate-100 transition-all">Cancel</button>
+                <button id="confirm-ok" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="fixed inset-0 z-[110] bg-slate-900/50 backdrop-blur-sm items-center justify-center p-6">
+        <div class="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden p-8 animate-modal">
+            <div class="flex justify-between items-center mb-8">
+                <h3 id="auth-title" class="text-2xl font-extrabold text-slate-900">Login</h3>
+                <button onclick="toggleAuthModal()" class="text-slate-400 hover:text-slate-900">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="auth-form" class="space-y-6">
+                <div id="name-field" class="space-y-2 hidden">
+                    <label class="text-sm font-bold text-slate-700 uppercase tracking-wider">Full Name</label>
+                    <input type="text" id="auth-name" class="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600" placeholder="John Doe">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-sm font-bold text-slate-700 uppercase tracking-wider">Email</label>
+                    <input type="email" id="auth-email" required class="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600" placeholder="email@example.com">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-sm font-bold text-slate-700 uppercase tracking-wider">Password</label>
+                    <input type="password" id="auth-password" required class="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600" placeholder="••••••••">
+                </div>
+                <button type="submit" id="auth-submit" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">Login</button>
+                <p class="text-center text-slate-500 text-sm">
+                    <span id="auth-switch-text">Don't have an account?</span>
+                    <button type="button" onclick="switchAuthMode()" id="auth-switch-btn" class="text-blue-600 font-bold ml-1">Sign Up</button>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cart Drawer Overlay -->
+    <div id="cart-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60]" onclick="toggleCart()"></div>
+
+    <!-- Cart Drawer -->
+    <div id="cart-drawer" class="fixed right-0 top-0 h-full w-full max-w-md bg-white z-[70] shadow-2xl flex flex-col">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h3 class="text-2xl font-extrabold text-slate-900">Your Cart</h3>
+            <button onclick="toggleCart()" class="p-2 text-slate-400 hover:text-slate-900 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        
+        <div id="cart-items" class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Cart items will be injected here -->
+        </div>
+
+        <div class="p-6 border-t border-slate-100 bg-slate-50">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-slate-500 font-bold">Total Amount</span>
+                <span id="cart-total" class="text-2xl font-extrabold text-blue-600">$0.00</span>
+            </div>
+            <button onclick="checkoutCart()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+                Checkout Now
+            </button>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="glass-nav fixed w-full z-50 top-0">
+        <div class="container mx-auto px-6 h-20 flex justify-between items-center">
+            <div class="flex items-center space-x-2 cursor-pointer group" onclick="window.location.href='index.html'">
+                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl group-hover:bg-blue-700 transition-colors">A</div>
+                <h1 class="text-2xl font-extrabold tracking-tight text-slate-900">Anime<span class="text-blue-600">Vault</span></h1>
+            </div>
+            
+            <div class="hidden md:flex space-x-8 font-medium">
+                <a href="index.html" class="text-slate-600 hover:text-blue-600 transition-colors">Home</a>
+                <a href="products.html" class="text-slate-600 hover:text-blue-600 transition-colors">Collections</a>
+                <a href="new-arrivals.html" class="text-blue-600 font-bold transition-colors">New Arrivals</a>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <div class="relative flex items-center">
+                    <input type="text" id="search-input" placeholder="Search products..." class="w-0 focus:w-64 opacity-0 focus:opacity-100 transition-all duration-300 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl focus:outline-none mr-2">
+                    <button id="search-btn" class="p-2 text-slate-600 hover:text-blue-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </button>
+                </div>
+                <button class="relative p-2 text-slate-600 hover:text-blue-600 transition-colors" id="cart-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                    <span id="cart-count" class="absolute top-0 right-0 w-4 h-4 bg-blue-600 text-white text-[10px] flex items-center justify-center rounded-full">0</span>
+                </button>
+                <div id="user-menu" class="relative">
+                    <button onclick="handleUserClick()" class="flex items-center space-x-2 p-1 pl-3 bg-slate-50 border border-slate-200 rounded-full hover:bg-white transition-all">
+                        <span id="user-name-display" class="text-sm font-bold text-slate-700">Login</span>
+                        <div id="user-avatar-display" class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header Section -->
+    <header class="pt-32 pb-12 bg-white">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl font-extrabold text-slate-900">New Arrivals</h2>
+            <p class="text-slate-500 mt-2 text-lg">Check out the latest additions to our premium anime collection</p>
+        </div>
+    </header>
+
+    <!-- Product Grid -->
+    <main class="container mx-auto px-6 py-12">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" id="product-grid">
+            <!-- Products will be injected here -->
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-100 pt-24 pb-12">
+        <div class="container mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+                <div class="space-y-6">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">A</div>
+                        <h1 class="text-xl font-extrabold text-slate-900">AnimeVault</h1>
+                    </div>
+                    <p class="text-slate-500 leading-relaxed">The ultimate destination for premium anime merchandise and exclusive collectibles.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-slate-900 mb-6">Shop</h4>
+                    <ul class="space-y-4 text-slate-500">
+                        <li><a href="products.html" class="hover:text-blue-600">Figures</a></li>
+                        <li><a href="products.html" class="hover:text-blue-600">Apparel</a></li>
+                        <li><a href="products.html" class="hover:text-blue-600">Accessories</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-bold text-slate-900 mb-6">Support</h4>
+                    <ul class="space-y-4 text-slate-500">
+                        <li><a href="#" class="hover:text-blue-600">Shipping Policy</a></li>
+                        <li><a href="#" class="hover:text-blue-600">Track Order</a></li>
+                        <li><a href="#" class="hover:text-blue-600">Contact Us</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="pt-12 border-t border-slate-100 text-center text-slate-400 text-sm">
+                <p>&copy; 2026 AnimeVault.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const DB_KEYS = {
+            PRODUCTS: 'animevault_products',
+            ORDERS: 'animevault_orders',
+            CART: 'animevault_cart',
+            USERS: 'animevault_users',
+            LOGGED_IN_USER: 'animevault_current_user'
+        };
+
+        function getDB(key, defaultVal = []) {
+            try {
+                const data = localStorage.getItem(key);
+                if (!data) return defaultVal;
+                const parsed = JSON.parse(data);
+                return Array.isArray(parsed) || typeof parsed === 'object' ? parsed : defaultVal;
+            } catch (e) {
+                console.error('DB Read Error:', e);
+                return defaultVal;
+            }
+        }
+
+        function setDB(key, data) {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (e) {
+                console.error('DB Write Error:', e);
+            }
+        }
+
+        // Auth Logic
+        let currentUser = JSON.parse(localStorage.getItem(DB_KEYS.LOGGED_IN_USER));
+        let isSignUp = false;
+
+        function toggleAuthModal() {
+            const modal = document.getElementById('auth-modal');
+            modal.classList.toggle('show');
+        }
+
+        function switchAuthMode() {
+            isSignUp = !isSignUp;
+            document.getElementById('auth-title').innerText = isSignUp ? 'Sign Up' : 'Login';
+            document.getElementById('auth-submit').innerText = isSignUp ? 'Create Account' : 'Login';
+            document.getElementById('auth-switch-text').innerText = isSignUp ? 'Already have an account?' : "Don't have an account?";
+            document.getElementById('auth-switch-btn').innerText = isSignUp ? 'Login' : 'Sign Up';
+            document.getElementById('name-field').classList.toggle('hidden', !isSignUp);
+        }
+
+        function handleUserClick() {
+            if (currentUser) {
+                window.location.href = 'profile.html';
+            } else {
+                toggleAuthModal();
+            }
+        }
+
+        document.getElementById('auth-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const users = getDB(DB_KEYS.USERS);
+
+            if (isSignUp) {
+                const name = document.getElementById('auth-name').value;
+                if (users.find(u => u.email === email)) {
+                    showNotification("User already exists!");
+                    return;
+                }
+                const newUser = { id: Date.now(), name, email, password, avatar: null, orders: [] };
+                users.push(newUser);
+                setDB(DB_KEYS.USERS, users);
+                currentUser = newUser;
+            } else {
+                const user = users.find(u => u.email === email && u.password === password);
+                if (user) {
+                    currentUser = user;
+                } else {
+                    showNotification("Invalid credentials!");
+                    return;
+                }
+            }
+
+            localStorage.setItem(DB_KEYS.LOGGED_IN_USER, JSON.stringify(currentUser));
+            updateUserUI();
+            toggleAuthModal();
+            showNotification(`Welcome back, ${currentUser.name}!`);
+        });
+
+        function updateUserUI() {
+            const nameDisplay = document.getElementById('user-name-display');
+            const avatarDisplay = document.getElementById('user-avatar-display');
+            
+            if (currentUser) {
+                nameDisplay.innerText = currentUser.name.split(' ')[0];
+                if (currentUser.avatar) {
+                    avatarDisplay.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
+                } else {
+                    avatarDisplay.innerHTML = currentUser.name.charAt(0).toUpperCase();
+                }
+            } else {
+                nameDisplay.innerText = 'Login';
+                avatarDisplay.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>`;
+            }
+        }
+
+        const API_URL = '/api/products';
+
+        async function syncWithBackend(products) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(products)
+                });
+                if (!response.ok) throw new Error('Failed to sync with backend');
+                console.log('Synced with backend successfully');
+            } catch (error) {
+                console.log('Backend sync failed, changes saved only locally:', error);
+            }
+        }
+
+        // Cart Logic
+        let cart = getDB(DB_KEYS.CART);
+        const cartCountEl = document.getElementById('cart-count');
+        const cartDrawer = document.getElementById('cart-drawer');
+        const cartOverlay = document.getElementById('cart-overlay');
+        const cartItemsEl = document.getElementById('cart-items');
+        const cartTotalEl = document.getElementById('cart-total');
+
+        function toggleCart() {
+            cartDrawer.classList.toggle('show');
+            cartOverlay.classList.toggle('show');
+            if (cartDrawer.classList.contains('show')) {
+                renderCart();
+            }
+        }
+
+        document.getElementById('cart-btn').addEventListener('click', toggleCart);
+
+        function updateCartUI() {
+            cartCountEl.innerText = cart.length;
+        }
+
+        function renderCart() {
+            cartItemsEl.innerHTML = cart.length ? '' : '<div class="text-center py-12 text-slate-400">Your cart is empty</div>';
+            let total = 0;
+
+            cart.forEach((item, index) => {
+                total += item.price;
+                const itemEl = document.createElement('div');
+                itemEl.className = "flex items-center space-x-4 bg-slate-50 p-4 rounded-2xl border border-slate-100";
+                itemEl.innerHTML = `
+                    <img src="${item.image}" class="w-16 h-16 rounded-xl object-cover bg-white">
+                    <div class="flex-1">
+                        <h4 class="font-bold text-slate-900 text-sm line-clamp-1">${item.name}</h4>
+                        <p class="text-blue-600 font-extrabold">$${item.price.toFixed(2)}</p>
+                    </div>
+                    <button onclick="removeFromCart(${index})" class="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                `;
+                cartItemsEl.appendChild(itemEl);
+            });
+
+            cartTotalEl.innerText = `$${total.toFixed(2)}`;
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            setDB(DB_KEYS.CART, cart);
+            updateCartUI();
+            renderCart();
+        }
+
+        // UI Management
+        function updateConfirmQty(change) {
+            const qtyInput = document.getElementById('confirm-qty');
+            let val = parseInt(qtyInput.value) + change;
+            if (val < 1) val = 1;
+            qtyInput.value = val;
+        }
+
+        function showConfirm(title, message, showQty = false) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirm-modal');
+                const titleEl = document.getElementById('confirm-title');
+                const messageEl = document.getElementById('confirm-message');
+                const qtySelector = document.getElementById('quantity-selector');
+                const qtyInput = document.getElementById('confirm-qty');
+                const okBtn = document.getElementById('confirm-ok');
+                const cancelBtn = document.getElementById('confirm-cancel');
+
+                titleEl.innerText = title;
+                messageEl.innerText = message;
+                qtyInput.value = 1;
+                qtySelector.style.display = showQty ? 'flex' : 'none';
+                modal.classList.add('show');
+
+                const cleanup = (confirmed) => {
+                    const quantity = parseInt(qtyInput.value);
+                    modal.classList.remove('show');
+                    okBtn.removeEventListener('click', onOk);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    resolve({ confirmed, quantity });
+                };
+
+                const onOk = () => cleanup(true);
+                const onCancel = () => cleanup(false);
+
+                okBtn.addEventListener('click', onOk);
+                cancelBtn.addEventListener('click', onCancel);
+            });
+        }
+
+        async function checkoutCart() {
+            if (!currentUser) {
+                showNotification("Please login to checkout!");
+                toggleAuthModal();
+                return;
+            }
+            if (cart.length === 0) {
+                showNotification("Your cart is empty!");
+                return;
+            }
+
+            const { confirmed } = await showConfirm("Checkout Now", `Are you sure you want to checkout ${cart.length} items?`);
+            if (!confirmed) return;
+
+            const products = getDB(DB_KEYS.PRODUCTS);
+            const orders = getDB(DB_KEYS.ORDERS);
+            
+            let itemsProcessed = 0;
+            let itemsToKeep = [];
+            let stockExceeded = false;
+
+            // Sort cart so we process items of the same ID together
+            const cartItemsById = cart.reduce((acc, item) => {
+                if (!acc[item.id]) acc[item.id] = [];
+                acc[item.id].push(item);
+                return acc;
+            }, {});
+
+            for (const productId in cartItemsById) {
+                const productIndex = products.findIndex(p => p.id == productId);
+                const itemsInCartForThisId = cartItemsById[productId];
+                
+                if (productIndex !== -1) {
+                    const product = products[productIndex];
+                    const requestedQty = itemsInCartForThisId.length;
+                    const availableQty = Math.max(0, product.stock || 0);
+                    
+                    const actualQty = Math.min(requestedQty, availableQty);
+                    
+                    // Create orders for available quantity
+                    for (let i = 0; i < actualQty; i++) {
+                        const individualOrder = {
+                            id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+                            userId: currentUser.id,
+                            customer: currentUser.name,
+                            product: product.name,
+                            image: product.image,
+                            items: [{ name: product.name, image: product.image, price: product.price }],
+                            amount: product.price,
+                            status: 'Pending',
+                            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                            timestamp: Date.now()
+                        };
+                        orders.unshift(individualOrder);
+                        itemsProcessed++;
+                    }
+
+                    // If we couldn't buy all, keep the remainder in itemsToKeep
+                    if (actualQty < requestedQty) {
+                        stockExceeded = true;
+                        const remainder = requestedQty - actualQty;
+                        for (let i = 0; i < remainder; i++) {
+                            itemsToKeep.push(itemsInCartForThisId[i + actualQty]);
+                        }
+                    }
+
+                    // Update stock
+                    if (actualQty > 0) {
+                        products[productIndex].stock = availableQty - actualQty;
+                        products[productIndex].sales = (products[productIndex].sales || 0) + actualQty;
+                    }
+                } else {
+                    // Product not found in DB, keep it in cart
+                    itemsToKeep.push(...itemsInCartForThisId);
+                }
+            }
+
+            if (itemsProcessed === 0) {
+                showNotification("Sorry, all items in your cart are now out of stock!");
+                return;
+            }
+
+            setDB(DB_KEYS.ORDERS, orders);
+            setDB(DB_KEYS.PRODUCTS, products);
+            
+            // Sync with backend
+            await syncWithBackend(products);
+            
+            cart = itemsToKeep;
+            setDB(DB_KEYS.CART, cart);
+            
+            updateCartUI();
+            toggleCart();
+            renderProducts();
+
+            if (stockExceeded) {
+                showNotification(`Some items were out of stock and remain in your cart. ${itemsProcessed} orders created.`);
+            } else {
+                showNotification(`Checkout successful! ${itemsProcessed} separate orders created.`);
+            }
+        }
+
+        function showNotification(text) {
+            const el = document.getElementById('notification');
+            document.getElementById('notification-text').innerText = text;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 2000);
+        }
+
+        async function addToCart(productId) {
+            const products = getDB(DB_KEYS.PRODUCTS);
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                const availableStock = product.stock || 0;
+                if (availableStock <= 0) {
+                    showNotification("Sorry, this item is out of stock!");
+                    return;
+                }
+
+                const { confirmed, quantity } = await showConfirm("Add to Cart", `Add ${product.name} to your cart?`, true);
+                if (!confirmed) return;
+                
+                // Add specified quantity to cart
+                for(let i = 0; i < quantity; i++) {
+                    cart.push({ ...product, cartId: Date.now() + Math.random() + i });
+                }
+                
+                setDB(DB_KEYS.CART, cart);
+                updateCartUI();
+                showNotification(`Added ${quantity} ${product.name}(s) to cart!`);
+            }
+        }
+
+        async function buyNow(productId) {
+            if (!currentUser) {
+                showNotification("Please login to purchase!");
+                toggleAuthModal();
+                return;
+            }
+            const products = getDB(DB_KEYS.PRODUCTS);
+            const productIndex = products.findIndex(p => p.id === productId);
+            if (productIndex !== -1) {
+                const product = products[productIndex];
+                const availableStock = product.stock || 0;
+                
+                if (availableStock <= 0) {
+                    showNotification("Sorry, this item is out of stock!");
+                    return;
+                }
+
+                const { confirmed, quantity } = await showConfirm("Buy Now", `Are you sure you want to purchase ${product.name}?`, true);
+                if (!confirmed) return;
+
+                // Check if enough stock for the selected quantity
+                const finalQty = Math.min(quantity, availableStock);
+                
+                const orders = getDB(DB_KEYS.ORDERS);
+                for(let i = 0; i < finalQty; i++) {
+                    const newOrder = {
+                        id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+                        userId: currentUser.id,
+                        customer: currentUser.name,
+                        product: product.name,
+                        image: product.image,
+                        items: [{ name: product.name, image: product.image, price: product.price }],
+                        amount: product.price,
+                        status: 'Pending',
+                        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        timestamp: Date.now()
+                    };
+                    orders.unshift(newOrder);
+                }
+                
+                // Decrement stock and increment sales
+                products[productIndex].stock = availableStock - finalQty;
+                products[productIndex].sales = (products[productIndex].sales || 0) + finalQty;
+                
+                setDB(DB_KEYS.ORDERS, orders);
+                setDB(DB_KEYS.PRODUCTS, products);
+                
+                // Sync with backend
+                await syncWithBackend(products);
+                
+                renderProducts();
+                if (finalQty < quantity) {
+                    showNotification(`Only ${finalQty} were available and purchased.`);
+                } else {
+                    showNotification(`Purchase successful! ${finalQty} order(s) created.`);
+                }
+            }
+        }
+
+        // Search Logic
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+
+        function performSearch() {
+            const query = searchInput.value.toLowerCase().trim();
+            if (query === "") return;
+            window.location.href = `products.html?search=${encodeURIComponent(query)}`;
+        }
+
+        searchBtn.addEventListener('click', () => {
+            if (searchInput.classList.contains('w-0')) {
+                searchInput.classList.remove('w-0', 'opacity-0');
+                searchInput.classList.add('w-64', 'opacity-100');
+                searchInput.focus();
+            } else {
+                performSearch();
+            }
+        });
+
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Render Products
+        function renderProducts() {
+            const products = getDB(DB_KEYS.PRODUCTS);
+            const productGrid = document.getElementById('product-grid');
+            if (!productGrid) return;
+            
+            // Sort by newest (assuming higher ID is newer)
+            const sortedProducts = [...products].sort((a, b) => (b.id || 0) - (a.id || 0));
+
+            productGrid.innerHTML = '';
+            if (sortedProducts.length === 0) {
+                productGrid.innerHTML = '<div class="col-span-full text-center py-24 text-slate-400">No products found.</div>';
+                return;
+            }
+
+            sortedProducts.forEach(product => {
+                const stock = product.stock || 0;
+                const isOutOfStock = stock <= 0;
+                const card = document.createElement('div');
+                card.className = `product-card group bg-white rounded-3xl border border-slate-100 p-4 transition-all ${isOutOfStock ? 'opacity-60 grayscale-[0.5]' : 'hover:shadow-2xl hover:shadow-blue-100 hover:-translate-y-2'}`;
+                card.innerHTML = `
+                    <div class="aspect-square rounded-2xl bg-slate-50 overflow-hidden mb-6 relative">
+                        <img src="${product.image}" alt="${product.name}" class="product-image w-full h-full object-cover transition-transform duration-700">
+                        <span class="absolute top-4 left-4 px-3 py-1 bg-white/90 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-slate-900 rounded-full border border-slate-100">${product.category}</span>
+                        ${isOutOfStock ? `
+                        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center">
+                            <span class="bg-white text-slate-900 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest shadow-xl">Out of Stock</span>
+                        </div>
+                        ` : `
+                        <div class="absolute bottom-4 left-4 px-3 py-1 bg-blue-600/90 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-white rounded-full border border-blue-500/50 shadow-lg">
+                            ${stock} In Stock
+                        </div>
+                        `}
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="font-bold text-slate-900 text-lg line-clamp-1 group-hover:text-blue-600 transition-colors">${product.name}</h3>
+                            <p class="text-slate-400 text-sm font-medium">${product.category}</p>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-2xl font-extrabold text-slate-900 tracking-tight">$${product.price.toFixed(2)}</span>
+                            <div class="flex space-x-2">
+                                <button onclick="addToCart(${product.id})" ${isOutOfStock ? 'disabled' : ''} class="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all ${isOutOfStock ? 'cursor-not-allowed opacity-50' : ''}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                </button>
+                                <button onclick="buyNow(${product.id})" ${isOutOfStock ? 'disabled' : ''} class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 ${isOutOfStock ? 'cursor-not-allowed opacity-50 bg-slate-400 shadow-none' : ''}">
+                                    Buy Now
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                productGrid.appendChild(card);
+            });
+        }
+
+        // Initial Load
+        updateCartUI();
+        updateUserUI();
+        renderProducts();
+
+        // Listen for storage changes
+        window.addEventListener('storage', (e) => {
+            if (e.key === DB_KEYS.PRODUCTS) {
+                renderProducts();
+            }
+        });
+    </script>
+</body>
+</html>

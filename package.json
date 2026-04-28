@@ -1,0 +1,16 @@
+{
+  "name": "animevault-backend",
+  "version": "1.0.0",
+  "description": "Simple backend for AnimeVault to persist products.json across browsers",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.104.1",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2"
+  }
+}

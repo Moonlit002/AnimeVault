@@ -1,0 +1,118 @@
+[
+    {
+        "id": 1777287166622,
+        "name": "Rimuru Cosplay",
+        "price": 59.99,
+        "category": "Costume",
+        "stock": 5,
+        "image": "https://www.gcosplay.com/cdn/shop/products/1_459c732f-f754-4280-abfd-5605d4021231.jpg?v=1669279453"
+    },
+    {
+        "id": 1777286780354,
+        "name": "Felix Cosplay Costume",
+        "price": 56.82,
+        "category": "Costume",
+        "stock": 5,
+        "image": "https://i.ebayimg.com/images/g/yQoAAeSwJMBpTisR/s-l1200.jpg"
+    },
+    {
+        "id": 1777286609260,
+        "name": "Astolfo Cosplay",
+        "price": 56.92,
+        "category": "Costume",
+        "stock": 5,
+        "image": "https://m.media-amazon.com/images/I/618LtJgMSzL._AC_UY1000_.jpg"
+    },
+    {
+        "id": 1777285533728,
+        "name": "Blue Archive T-Shirt",
+        "price": 5,
+        "category": "T-Shirt",
+        "stock": 5,
+        "image": "https://down-ph.img.susercontent.com/file/sg-11134201-7rd6a-lwmol3qxtpqw1c"
+    },
+    {
+        "id": 1777285369578,
+        "name": "Pare, Mahal Mo Raw Ako?",
+        "price": 3,
+        "category": "Wallpaper",
+        "stock": 5,
+        "image": "https://i.ytimg.com/vi/q8EG_ypc7vQ/sddefault.jpg"
+    },
+    {
+        "id": 1777285161165,
+        "name": "Eminence In Shadow Wallpaper",
+        "price": 5,
+        "category": "Wallpaper",
+        "stock": 5,
+        "image": "https://i.redd.it/0ik2j683sz5a1.jpg"
+    },
+    {
+        "id": 1777284963727,
+        "name": "Dante Gulapa Wallpaper",
+        "price": 3,
+        "category": "Wallpaper",
+        "stock": 5,
+        "image": "https://i1.sndcdn.com/artworks-000398337021-xz6rtm-t1080x1080.jpg"
+    },
+    {
+        "id": 1777284881943,
+        "name": "Ding Dong Wallpaper",
+        "price": 3,
+        "category": "Wallpaper",
+        "stock": 5,
+        "image": "https://pbs.twimg.com/media/FpvGzxCagAEPHeL.jpg"
+    },
+    {
+        "id": 1777284466652,
+        "name": "Beta",
+        "price": 288.92,
+        "category": "Premium Figure",
+        "stock": 5,
+        "image": "https://animota.net/cdn/shop/files/FIGURE-161114_01.jpg?v=1703148187"
+    },
+    {
+        "id": 1777022174191,
+        "name": "Mambo",
+        "price": 59.99,
+        "category": "Nendoroid",
+        "stock": 5,
+        "image": "https://m.media-amazon.com/images/I/513kCvbGVDL._AC_UF894,1000_QL80_.jpg",
+        "sales": 0
+    },
+    {
+        "id": 1777022004001,
+        "name": "Delta",
+        "price": 288.92,
+        "category": "Premium Figure",
+        "stock": 5,
+        "image": "https://i.etsystatic.com/59599762/r/il/15e756/6919677717/il_fullxfull.6919677717_42fq.jpg"
+    },
+    {
+        "id": 1776959745006,
+        "name": "Rimuru Ichiban Kuji",
+        "price": 92.29,
+        "category": "Figure",
+        "stock": 5,
+        "image": "https://japondemande.com/cdn/shop/files/product_figure_tensura_ichiban-kuji_holy-demon-war_rimuru-tempest-last-one1.jpg?v=1722604427",
+        "sales": 11
+    },
+    {
+        "id": 1776957943325,
+        "name": "Milim",
+        "price": 299.89,
+        "category": "Premium Figure",
+        "stock": 5,
+        "image": "https://finanime.fi/wp-content/uploads/2023/10/205890_1.jpg",
+        "sales": 3
+    },
+    {
+        "id": 1776956397225,
+        "name": "Rimuru",
+        "price": 299.89,
+        "category": "Premium Figure",
+        "stock": 5,
+        "image": "https://i.redd.it/my-new-most-expensive-figure-arrived-rimuru-utimate-version-v0-kpwhyv2f0eo91.jpg?width=1512&format=pjpg&auto=webp&s=24617b196a62b186ec530c53eb18f4dbdf06803c",
+        "sales": 18
+    }
+]
