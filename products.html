@@ -535,7 +535,7 @@
                     // Create orders for available quantity
                     for (let i = 0; i < actualQty; i++) {
                         const individualOrder = {
-                            id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+                            id: Math.floor(Date.now() + Math.random() * 1000),
                             userId: currentUser.id,
                             customer: currentUser.name,
                             product: product.name,
@@ -652,7 +652,7 @@
                 const orders = getDB(DB_KEYS.ORDERS);
                 for(let i = 0; i < finalQty; i++) {
                     const newOrder = {
-                        id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+                        id: Math.floor(Date.now() + Math.random() * 1000),
                         userId: currentUser.id,
                         customer: currentUser.name,
                         product: product.name,

@@ -225,9 +225,9 @@ app.get('/api/orders', async (req, res) => {
     let query = supabase.from('orders').select('*');
     
     if (userId) {
-        const customers = [userId];
-        if (userName) customers.push(userName);
-        query = query.in('customer', customers);
+        const customerList = [userId];
+        if (userName) customerList.push(userName);
+        query = query.in('customers', customerList);
     }
     
     const { data, error } = await query.order('date', { ascending: false });
@@ -236,21 +236,31 @@ app.get('/api/orders', async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
     console.log(`Found ${data.length} orders`);
-    res.json(data);
+    
+    // Map 'customers' back to 'customer' for frontend compatibility
+    const mappedData = data.map(order => ({
+        ...order,
+        customer: order.customers
+    }));
+    
+    res.json(mappedData);
 });
 
 app.post('/api/orders', async (req, res) => {
     const orders = req.body;
     const ordersToInsert = Array.isArray(orders) ? orders : [orders];
     
-    const mappedOrders = ordersToInsert.map(order => ({
-        order_id: order.id || 'ORD-' + Math.floor(1000 + Math.random() * 9000),
-        customer: order.customer || order.userId,
-        product: order.product,
-        status: order.status || 'Pending',
-        amount: order.amount,
-        date: order.date || new Date().toISOString()
-    }));
+    const mappedOrders = ordersToInsert.map(order => {
+        const orderId = parseInt(order.id || order.order_id);
+        return {
+            order_id: !isNaN(orderId) ? orderId : Math.floor(Date.now() + Math.random() * 1000),
+            customers: order.customer || order.userId,
+            product: order.product,
+            status: order.status || 'Pending',
+            amount: order.amount,
+            date: order.date || new Date().toISOString()
+        };
+    });
     
     const { data, error } = await supabase.from('orders').insert(mappedOrders).select();
     if (error) return res.status(500).json({ error: error.message });
@@ -259,8 +269,18 @@ app.post('/api/orders', async (req, res) => {
 
 app.put('/api/orders/:orderId', async (req, res) => {
     const { orderId } = req.params;
-    const updates = req.body;
+    let updates = req.body;
     console.log(`Attempting to update order ${orderId} with:`, updates);
+
+    // Map 'customer' to 'customers' if present in updates
+    if (updates.customer) {
+        updates.customers = updates.customer;
+        delete updates.customer;
+    }
+    
+    // Ensure order_id is not in updates as it's the primary key
+    delete updates.order_id;
+    delete updates.id;
     
     const { data, error } = await supabase
         .from('orders')
