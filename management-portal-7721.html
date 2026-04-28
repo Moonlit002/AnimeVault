@@ -606,16 +606,12 @@
             renderDashboard();
         }
         
-        // Initialize Orders from API
         async function initializeOrders() {
-            if (!await checkAuth()) return;
-            
             try {
                 const response = await fetch(ORDERS_API_URL);
                 if (response.ok) {
                     const serverData = await response.json();
                     
-                    // Map Supabase orders to frontend format
                     const mappedOrders = serverData.map(order => ({
                         id: order.order_id,
                         order_id: order.order_id,
@@ -636,7 +632,6 @@
             } catch (error) {
                 console.log('Server unreachable for orders, using local storage');
                 showNotification('Warning: Failed to load orders from server, showing local orders only');
-                // Keep using local orders as fallback
             }
         }
 
@@ -749,6 +744,9 @@
                 titleEl.innerText = 'Orders';
                 descEl.innerText = 'Track and manage customer orders';
                 actionsEl.innerHTML = '';
+                initializeOrders().then(() => {
+                    renderDashboard();
+                });
             } else if (tabName === 'content') {
                 titleEl.innerText = 'Site Content';
                 descEl.innerText = 'Manage homepage featured items and banners';
@@ -1152,27 +1150,12 @@
                     const response = await fetch(`${ORDERS_API_URL}/${id}`, {
                         method: 'DELETE'
                     });
-                    
+
                     if (!response.ok) throw new Error('Failed to delete order');
-                    
-                    const orders = getDB(DB_KEYS.ORDERS);
-                    const orderToDelete = orders.find(o => String(o.id) === String(id));
-                    
-                    if (orderToDelete) {
-                        // Update product sales
-                        const products = getDB(DB_KEYS.PRODUCTS);
-                        const productIndex = products.findIndex(p => p.name === orderToDelete.product);
-                        if (productIndex !== -1) {
-                            products[productIndex].sales = Math.max(0, (products[productIndex].sales || 0) - 1);
-                            setDB(DB_KEYS.PRODUCTS, products);
-                            syncWithBackend(products);
-                        }
-                        
-                        const updatedOrders = orders.filter(o => String(o.id) !== String(id));
-                        setDB(DB_KEYS.ORDERS, updatedOrders);
-                        renderDashboard();
-                        showNotification('Order removed from history');
-                    }
+
+                    await initializeOrders();
+                    renderDashboard();
+                    showNotification('Order removed from history');
                 } catch (error) {
                     console.error('Error deleting order:', error);
                     showNotification(`Error: ${error.message}`);
@@ -1216,17 +1199,12 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: newStatus })
                 });
-                
+
                 if (!response.ok) throw new Error('Failed to update order status');
-                
-                const orders = getDB(DB_KEYS.ORDERS);
-                const orderIndex = orders.findIndex(o => String(o.id) === String(orderId));
-                if (orderIndex !== -1) {
-                    orders[orderIndex].status = newStatus;
-                    setDB(DB_KEYS.ORDERS, orders);
-                    showNotification(`Order status updated to ${newStatus}`);
-                    renderDashboard();
-                }
+
+                await initializeOrders();
+                renderDashboard();
+                showNotification(`Order status updated to ${newStatus}`);
             } catch (error) {
                 console.error('Error updating order status:', error);
                 showNotification(`Error: ${error.message}`);
