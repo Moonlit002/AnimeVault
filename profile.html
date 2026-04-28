@@ -220,7 +220,11 @@
                 avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
             }
 
-            const orders = getDB(DB_KEYS.ORDERS).filter(o => o.userId === currentUser.id);
+            const orders = getDB(DB_KEYS.ORDERS).filter(o => 
+                o.userId === currentUser.id || 
+                o.customer === currentUser.id || 
+                o.customer === currentUser.name
+            );
             const totalSpent = orders.reduce((sum, o) => sum + Number(o.amount), 0);
 
             document.getElementById('stat-orders').innerText = orders.length;
@@ -345,18 +349,20 @@
 
         async function loadOrdersFromSupabase() {
             try {
-                const response = await fetch(`/api/orders?userId=${currentUser.id}`);
+                const response = await fetch(`/api/orders?userId=${currentUser.id}&userName=${currentUser.name}`);
                 if (response.ok) {
                     const supabaseOrders = await response.json();
                     return supabaseOrders.map(order => ({
                         id: order.order_id,
-                        userId: order.customer,
+                        order_id: order.order_id,
+                        userId: (order.customer === currentUser.id || order.customer === currentUser.name) ? currentUser.id : order.customer,
                         customer: order.customer,
                         product: order.product,
                         amount: order.amount,
                         status: order.status,
                         date: new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                        image: null
+                        timestamp: new Date(order.date).getTime(),
+                        image: null // Note: image is not in orders table currently
                     }));
                 }
             } catch (e) {
