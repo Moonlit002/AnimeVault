@@ -16,7 +16,7 @@ const supabase = createClient(
 // --- FIX 1: MUST PUT THESE FIRST ---
 app.use(cors({
     origin: '*', // This allows all devices to talk to your API
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type']
 }));
 app.use(bodyParser.json());
@@ -233,6 +233,18 @@ app.put('/api/orders/:orderId', async (req, res) => {
     
     if (error) return res.status(500).json({ error: error.message });
     res.json({ message: 'Order updated successfully', data });
+});
+
+app.delete('/api/orders/:orderId', async (req, res) => {
+    const { orderId } = req.params;
+    
+    const { data, error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('order_id', orderId);
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ message: 'Order deleted successfully', data });
 });
 
 // 8. Update User Avatar
