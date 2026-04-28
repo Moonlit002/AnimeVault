@@ -721,14 +721,20 @@
 
             // Save orders to Supabase
             try {
-                await fetch('/api/orders', {
+                const response = await fetch('/api/orders', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(ordersToSave)
                 });
-                console.log('Orders saved to Supabase successfully');
+                
+                if (response.ok) {
+                    console.log('Orders saved to Supabase successfully');
+                } else {
+                    throw new Error('Server responded with error');
+                }
             } catch (e) {
                 console.error('Failed to save orders to Supabase:', e);
+                showNotification('Warning: Order saved locally, but failed to sync with server');
             }
 
             setDB(DB_KEYS.ORDERS, orders);
@@ -839,14 +845,20 @@
                 
                 // Save orders to Supabase
                 try {
-                    await fetch('/api/orders', {
+                    const response = await fetch('/api/orders', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(ordersToSave)
                     });
-                    console.log('Orders saved to Supabase successfully');
+                    
+                    if (response.ok) {
+                        console.log('Orders saved to Supabase successfully');
+                    } else {
+                        throw new Error('Server responded with error');
+                    }
                 } catch (e) {
                     console.error('Failed to save orders to Supabase:', e);
+                    showNotification('Warning: Order saved locally, but failed to sync with server');
                 }
                 
                 // Sync with backend if available

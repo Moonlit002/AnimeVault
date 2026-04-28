@@ -635,6 +635,7 @@
                 }
             } catch (error) {
                 console.log('Server unreachable for orders, using local storage');
+                showNotification('Warning: Failed to load orders from server, showing local orders only');
                 // Keep using local orders as fallback
             }
         }
