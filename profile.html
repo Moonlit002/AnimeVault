@@ -349,21 +349,29 @@
 
         async function loadOrdersFromSupabase() {
             try {
-                const response = await fetch(`/api/orders?userId=${currentUser.id}&userName=${currentUser.name}`);
+                const url = `/api/orders?userId=${encodeURIComponent(currentUser.id)}&userName=${encodeURIComponent(currentUser.name)}`;
+                const response = await fetch(url);
                 if (response.ok) {
                     const supabaseOrders = await response.json();
-                    return supabaseOrders.map(order => ({
-                        id: order.order_id,
-                        order_id: order.order_id,
-                        userId: (order.customer === currentUser.id || order.customer === currentUser.name) ? currentUser.id : order.customer,
-                        customer: order.customer,
-                        product: order.product,
-                        amount: order.amount,
-                        status: order.status,
-                        date: new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                        timestamp: new Date(order.date).getTime(),
-                        image: null // Note: image is not in orders table currently
-                    }));
+                    const localOrders = getDB(DB_KEYS.ORDERS);
+                    
+                    return supabaseOrders.map(order => {
+                        // Try to find the image from local orders if it exists
+                        const localMatch = localOrders.find(lo => (lo.id === order.order_id || lo.order_id === order.order_id));
+                        
+                        return {
+                            id: order.order_id,
+                            order_id: order.order_id,
+                            userId: (order.customer === currentUser.id || order.customer === currentUser.name) ? currentUser.id : order.customer,
+                            customer: order.customer,
+                            product: order.product,
+                            amount: order.amount,
+                            status: order.status,
+                            date: new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                            timestamp: new Date(order.date).getTime(),
+                            image: localMatch ? localMatch.image : (order.image || null)
+                        };
+                    });
                 }
             } catch (e) {
                 console.error('Failed to load orders from Supabase:', e);
@@ -377,7 +385,10 @@
         }
 
         async function initializeProfile() {
-            // Try to load orders from Supabase first
+            // Render local data immediately for better UX
+            renderProfile();
+            
+            // Try to load orders from Supabase in the background
             const supabaseOrders = await loadOrdersFromSupabase();
             
             // Merge with local orders (if any)

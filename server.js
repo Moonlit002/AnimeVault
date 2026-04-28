@@ -195,12 +195,9 @@ app.get('/api/orders', async (req, res) => {
     let query = supabase.from('orders').select('*');
     
     if (userId) {
-        if (userName) {
-            // Use quotes for both to be safe, especially for UUIDs and names with spaces
-            query = query.or(`customer.eq."${userId}",customer.eq."${userName}"`);
-        } else {
-            query = query.eq('customer', userId);
-        }
+        const customers = [userId];
+        if (userName) customers.push(userName);
+        query = query.in('customer', customers);
     }
     
     const { data, error } = await query.order('date', { ascending: false });
